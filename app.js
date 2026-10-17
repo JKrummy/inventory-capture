@@ -2,7 +2,7 @@
    Phase 2: photos and a draft record go straight to Dropbox.
    The Mac side turns inbox drafts into real INV- numbered items. */
 
-const VERSION = '1.0.2';
+const VERSION = '1.0.3';
 
 const LS = {
   appKey:  'jkinv.appKey',
@@ -684,7 +684,11 @@ async function start() {
   }
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => { /* fine without it */ });
+    /* updateViaCache 'none' stops the browser serving sw.js from its own
+       HTTP cache, so an update is picked up on the next open. */
+    navigator.serviceWorker
+      .register('sw.js', { updateViaCache: 'none' })
+      .catch(() => { /* fine without it, the app just will not open offline */ });
   }
 }
 
