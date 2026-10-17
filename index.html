@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1b1f24">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Inventory">
+<title>JK Inventory</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header id="topbar">
+  <h1 id="topbar-title">JK Inventory</h1>
+  <button id="btn-settings" class="icon-btn" type="button" aria-label="Settings">Settings</button>
+</header>
+
+<main>
+
+<!-- ============ CONNECT ============ -->
+<section id="screen-connect" class="screen" aria-labelledby="connect-h">
+  <h2 id="connect-h">Connect to Dropbox</h2>
+  <p class="lead">This is a one-time setup. After this, the app stays connected.</p>
+
+  <ol class="steps">
+    <li>
+      <strong>Step 1.</strong> Paste your Dropbox App Key.
+      <label class="field">
+        <span>Dropbox App Key</span>
+        <input id="in-appkey" type="text" autocomplete="off" autocapitalize="off"
+               autocorrect="off" spellcheck="false" placeholder="for example a1b2c3d4e5f6g7h">
+      </label>
+    </li>
+    <li>
+      <strong>Step 2.</strong> Open Dropbox and allow access.
+      <button id="btn-authorize" class="big-btn" type="button">Open Dropbox</button>
+    </li>
+    <li>
+      <strong>Step 3.</strong> Dropbox shows you a code. Copy it, come back here, and paste it.
+      <label class="field">
+        <span>Code from Dropbox</span>
+        <input id="in-authcode" type="text" autocomplete="off" autocapitalize="off"
+               autocorrect="off" spellcheck="false" placeholder="paste the code here">
+      </label>
+      <button id="btn-paste" class="plain-btn" type="button">Paste from clipboard</button>
+      <button id="btn-finish-connect" class="big-btn" type="button">Finish connecting</button>
+    </li>
+  </ol>
+
+  <p id="connect-status" class="status" role="status" aria-live="polite"></p>
+</section>
+
+<!-- ============ HOME ============ -->
+<section id="screen-home" class="screen" aria-labelledby="home-h" hidden>
+  <h2 id="home-h" class="sr-only">Home</h2>
+
+  <button id="btn-new-item" class="hero-btn" type="button">
+    <span class="hero-btn-main">New Item</span>
+    <span class="hero-btn-sub">Open a fresh bucket and start snapping</span>
+  </button>
+
+  <div class="tiles">
+    <button id="tile-queue" class="tile" type="button">
+      <span class="tile-number" id="num-waiting">0</span>
+      <span class="tile-label">waiting to upload</span>
+    </button>
+    <div class="tile tile-static">
+      <span class="tile-number" id="num-filed">0</span>
+      <span class="tile-label">filed this session</span>
+    </div>
+  </div>
+
+  <p id="home-status" class="status" role="status" aria-live="polite"></p>
+  <button id="btn-upload-now" class="plain-btn wide" type="button" hidden>Upload waiting items now</button>
+</section>
+
+<!-- ============ ONE ITEM ============ -->
+<section id="screen-item" class="screen" aria-labelledby="item-h" hidden>
+  <h2 id="item-h">New Item</h2>
+  <p class="lead" id="item-bucket-note">Every photo you take now belongs to this one item,
+     until you tap Save or Discard.</p>
+
+  <div class="capture-row">
+    <label class="big-btn as-label" for="in-photos">Add Photos</label>
+    <input id="in-photos" type="file" accept="image/*" capture="environment" multiple hidden>
+
+    <label class="plain-btn as-label" for="in-receipts">Add Receipt or Document</label>
+    <input id="in-receipts" type="file" accept="image/*,application/pdf" multiple hidden>
+  </div>
+
+  <h3 class="count-h">Photos of the item (<span id="count-photos">0</span>)</h3>
+  <div id="thumbs-photos" class="thumbs" aria-live="polite"></div>
+
+  <h3 class="count-h">Receipts and documents (<span id="count-receipts">0</span>)</h3>
+  <div id="thumbs-receipts" class="thumbs" aria-live="polite"></div>
+
+  <h3>Details</h3>
+  <p class="hint">All of this is optional. Fill in what you know now, fix the rest later at the desk.</p>
+
+  <label class="field">
+    <span>What is it?</span>
+    <input id="f-name" type="text" placeholder="Vortex Razor HD scope">
+  </label>
+
+  <label class="field">
+    <span>Category</span>
+    <select id="f-category"></select>
+  </label>
+
+  <p id="serial-nag" class="nag" hidden>This category wants a serial number.</p>
+
+  <div class="two-up">
+    <label class="field"><span>Make</span><input id="f-make" type="text"></label>
+    <label class="field"><span>Model</span><input id="f-model" type="text"></label>
+  </div>
+
+  <label class="field">
+    <span>Serial number</span>
+    <input id="f-serial" type="text" autocapitalize="characters" autocorrect="off" spellcheck="false">
+  </label>
+
+  <div class="two-up">
+    <label class="field"><span>Quantity</span><input id="f-quantity" type="number" inputmode="numeric" min="1" value="1"></label>
+    <label class="field"><span>Year made</span><input id="f-year" type="text" inputmode="numeric" placeholder="2021"></label>
+  </div>
+
+  <label class="field">
+    <span>Where is it?</span>
+    <input id="f-location" type="text" list="known-locations" placeholder="Gun safe, shop, garage">
+  </label>
+  <datalist id="known-locations"></datalist>
+
+  <label class="field">
+    <span>Whose is it?</span>
+    <input id="f-owner" type="text" list="known-owners" value="Me">
+  </label>
+  <datalist id="known-owners"></datalist>
+
+  <label class="field">
+    <span>Attached to (item number, if this is mounted on something)</span>
+    <input id="f-attached" type="text" placeholder="INV-00012">
+  </label>
+
+  <fieldset class="group">
+    <legend>What I paid &mdash; this never changes later</legend>
+    <div class="two-up">
+      <label class="field"><span>Price paid</span><input id="f-price" type="text" inputmode="decimal" placeholder="1800"></label>
+      <label class="field"><span>Date bought</span><input id="f-pdate" type="text" placeholder="2021 or 2021-06-14"></label>
+    </div>
+    <label class="field"><span>Bought from</span><input id="f-seller" type="text" placeholder="Cabela's"></label>
+    <label class="check">
+      <input id="f-price-est" type="checkbox">
+      <span>These are my best guess, not off a receipt</span>
+    </label>
+  </fieldset>
+
+  <label class="field">
+    <span>Condition</span>
+    <input id="f-condition" type="text" placeholder="Excellent, light wear on the finish">
+  </label>
+
+  <label class="field">
+    <span>Notes</span>
+    <textarea id="f-notes" rows="3"></textarea>
+  </label>
+
+  <div class="actions">
+    <button id="btn-save-item" class="big-btn" type="button">Save Item</button>
+    <button id="btn-discard-item" class="plain-btn danger" type="button">Discard</button>
+  </div>
+  <p id="item-status" class="status" role="status" aria-live="polite"></p>
+</section>
+
+<!-- ============ QUEUE ============ -->
+<section id="screen-queue" class="screen" aria-labelledby="queue-h" hidden>
+  <h2 id="queue-h">Waiting to upload</h2>
+  <p class="lead">Items are saved on this phone the moment you tap Save. Nothing is lost if
+     you have no signal &mdash; they go to Dropbox as soon as you are back online.</p>
+  <div id="queue-list"></div>
+  <button id="btn-queue-upload" class="big-btn" type="button">Try uploading now</button>
+  <button id="btn-queue-back" class="plain-btn wide" type="button">Back</button>
+  <p id="queue-status" class="status" role="status" aria-live="polite"></p>
+</section>
+
+<!-- ============ SETTINGS ============ -->
+<section id="screen-settings" class="screen" aria-labelledby="settings-h" hidden>
+  <h2 id="settings-h">Settings</h2>
+
+  <p id="settings-account" class="status"></p>
+
+  <label class="field">
+    <span>Folder in Dropbox</span>
+    <input id="f-root" type="text" value="/Inventory" autocapitalize="off" autocorrect="off" spellcheck="false">
+  </label>
+  <button id="btn-save-root" class="plain-btn" type="button">Save folder</button>
+
+  <h3>Check the connection</h3>
+  <button id="btn-test" class="plain-btn wide" type="button">Test Dropbox connection</button>
+
+  <h3>Disconnect</h3>
+  <p class="hint">This forgets your Dropbox sign-in on this phone. Items already waiting to
+     upload stay where they are.</p>
+  <button id="btn-disconnect" class="plain-btn danger wide" type="button">Disconnect Dropbox</button>
+
+  <button id="btn-settings-back" class="plain-btn wide" type="button">Back</button>
+  <p id="settings-status" class="status" role="status" aria-live="polite"></p>
+</section>
+
+</main>
+
+<footer id="footer">
+  <span id="version-label">version</span>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "JK Inventory",
+  "short_name": "Inventory",
+  "description": "Snap photos of what you own and file them into Dropbox.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#15181c",
+  "theme_color": "#1b1f24",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
