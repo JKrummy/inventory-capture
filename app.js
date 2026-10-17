@@ -2,7 +2,7 @@
    Phase 2: photos and a draft record go straight to Dropbox.
    The Mac side turns inbox drafts into real INV- numbered items. */
 
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 
 const LS = {
   appKey:  'jkinv.appKey',
@@ -257,7 +257,10 @@ function newBucket() {
     id: draftId(),
     createdAt: new Date().toISOString(),
     photos: [],
-    receipts: []
+    receipts: [],
+    /* These only ever count up. Numbering by array length would hand out a
+       name twice once a photo is removed, and two files would collide. */
+    seq: { photos: 0, receipts: 0 }
   };
 
   ['f-name', 'f-make', 'f-model', 'f-serial', 'f-year', 'f-location',
@@ -320,7 +323,7 @@ async function addFiles(fileList, kind) {
   for (const file of files) {
     const blob = await shrinkImage(file);
     const isImage = blob.type.startsWith('image/');
-    const n = bucket[kind].length + 1;
+    const n = (bucket.seq[kind] += 1);
     const ext = isImage ? 'jpg' : (file.name.split('.').pop() || 'bin').toLowerCase();
     bucket[kind].push({
       name: String(n).padStart(2, '0') + '.' + ext,
