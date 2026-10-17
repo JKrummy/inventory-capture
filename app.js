@@ -2,7 +2,7 @@
    Phase 2: photos and a draft record go straight to Dropbox.
    The Mac side turns inbox drafts into real INV- numbered items. */
 
-const VERSION = '1.0.3';
+const VERSION = '1.0.4';
 
 const LS = {
   appKey:  'jkinv.appKey',
@@ -523,6 +523,13 @@ function wire() {
   fillDatalist('known-locations', LS.places, []);
 
   /* --- connect --- */
+  /* A link may carry the key, as in ...?key=abc123. Saves typing it on a phone.
+     It is an app identifier, not a secret - PKCE means there is no secret. */
+  const fromLink = new URLSearchParams(location.search).get('key');
+  if (fromLink) {
+    localStorage.setItem(LS.appKey, fromLink.trim());
+    history.replaceState(null, '', location.pathname);
+  }
   $('in-appkey').value = localStorage.getItem(LS.appKey) || '';
 
   $('btn-authorize').onclick = async () => {
@@ -547,6 +554,15 @@ function wire() {
     say($('connect-status'),
         'Dropbox is opening. Tap Allow, copy the code it shows, then come back here.', 'busy');
     window.open(url, '_blank');
+  };
+
+  $('btn-paste-key').onclick = async () => {
+    try {
+      $('in-appkey').value = (await navigator.clipboard.readText()).trim();
+      say($('connect-status'), 'App key pasted. Now tap Open Dropbox.', 'ok');
+    } catch {
+      say($('connect-status'), 'I could not read the clipboard. Tap the box and paste by hand.', 'bad');
+    }
   };
 
   $('btn-paste').onclick = async () => {
