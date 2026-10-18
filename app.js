@@ -2,7 +2,7 @@
    Phase 2: photos and a draft record go straight to Dropbox.
    The Mac side turns inbox drafts into real INV- numbered items. */
 
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 
 const LS = {
   appKey:  'jkinv.appKey',
@@ -242,7 +242,7 @@ function shrinkImage(file) {
 
 /* ============================================================ screens */
 
-const SCREENS = ['connect', 'home', 'item', 'queue', 'settings'];
+const SCREENS = ['connect', 'home', 'item', 'voice', 'queue', 'settings'];
 
 function show(name) {
   SCREENS.forEach((s) => { $('screen-' + s).hidden = (s !== name); });
@@ -258,19 +258,24 @@ function newBucket() {
     createdAt: new Date().toISOString(),
     photos: [],
     receipts: [],
+    /* What he said out loud, and which boxes came out of it as a guess
+       rather than a fact. Both travel with the item. */
+    transcript: '',
+    estimated: new Set(),
     /* These only ever count up. Numbering by array length would hand out a
        name twice once a photo is removed, and two files would collide. */
     seq: { photos: 0, receipts: 0 }
   };
 
   ['f-name', 'f-make', 'f-model', 'f-serial', 'f-year', 'f-location',
-   'f-attached', 'f-price', 'f-pdate', 'f-seller', 'f-condition',
+   'f-attached', 'f-price', 'f-pdate', 'f-seller', 'f-myvalue', 'f-condition',
    'f-notes'].forEach((id) => { $(id).value = ''; });
   $('f-quantity').value = '1';
   $('f-owner').value = 'Me';
   $('f-price-est').checked = false;
   $('f-category').value = 'Everything else';
 
+  showTranscript();
   renderThumbs();
   updateNag();
   say($('item-status'), '', '');
@@ -346,14 +351,27 @@ function updateNag() {
 }
 
 function collectFields() {
-  const estimated = [];
+  /* Two ways a value gets marked a guess: he ticked the box, or he said
+     something like "about 1,800" out loud and Talk to Fill heard the hedge. */
+  const estimated = new Set(bucket ? bucket.estimated : []);
   if ($('f-price-est').checked) {
     ['purchase_price', 'purchase_date', 'seller'].forEach((f) => {
       if ($({purchase_price: 'f-price', purchase_date: 'f-pdate', seller: 'f-seller'}[f]).value.trim()) {
-        estimated.push(f);
+        estimated.add(f);
       }
     });
   }
+  /* His own gut value is a guess by definition - that is what makes it his
+     gut value and not a researched one. */
+  if ($('f-myvalue').value.trim()) estimated.add('my_value');
+
+  /* Drop flags for boxes he has since emptied. */
+  const live = new Set();
+  estimated.forEach((f) => {
+    const id = VOICE_TARGETS[f];
+    if (!id || $(id).value.trim()) live.add(f);
+  });
+
   return {
     name: $('f-name').value.trim(),
     category: $('f-category').value,
@@ -368,9 +386,11 @@ function collectFields() {
     purchase_price: $('f-price').value.trim(),
     purchase_date: $('f-pdate').value.trim(),
     seller: $('f-seller').value.trim(),
+    my_value: $('f-myvalue').value.trim(),
     condition: $('f-condition').value.trim(),
     notes: $('f-notes').value.trim(),
-    estimated_fields: estimated
+    voice_transcript: bucket ? bucket.transcript : '',
+    estimated_fields: Array.from(live)
   };
 }
 
@@ -403,6 +423,192 @@ async function saveItem() {
   say($('home-status'), 'Saved on this phone. Sending to Dropbox...', 'busy');
   await refreshCounts();
   flushQueue();
+}
+
+/* ============================================================ talk to fill
+
+   The microphone fills the same boxes he would have typed into, and then he
+   looks at them. Nothing here writes to the database and nothing here skips
+   the Save button - this only saves him the typing.  */
+
+/* Where each thing the parser can hear ends up on the form. */
+const VOICE_TARGETS = {
+  name: 'f-name', category: 'f-category', make: 'f-make', model: 'f-model',
+  serial: 'f-serial', quantity: 'f-quantity', year_made: 'f-year',
+  owner: 'f-owner', location: 'f-location', attached_to: 'f-attached',
+  purchase_price: 'f-price', purchase_date: 'f-pdate', seller: 'f-seller',
+  my_value: 'f-myvalue', condition: 'f-condition', notes: 'f-notes'
+};
+
+/* Boxes that start with something in them. A value he never chose should not
+   count as something worth protecting from the microphone. */
+const VOICE_DEFAULTS = { quantity: '1', owner: 'Me', category: 'Everything else' };
+
+const SPOKEN_NAMES = {
+  name: 'what it is', category: 'category', make: 'make', model: 'model',
+  serial: 'serial number', quantity: 'quantity', year_made: 'year made',
+  owner: 'owner', location: 'where it is', attached_to: 'attached to',
+  purchase_price: 'price paid', purchase_date: 'date bought', seller: 'bought from',
+  my_value: 'what you think it is worth', condition: 'condition', notes: 'notes'
+};
+
+let listener = null;
+let heard = [];
+
+function showTranscript() {
+  const text = bucket && bucket.transcript ? bucket.transcript : '';
+  $('said-text').textContent = text;
+  $('said-block').hidden = !text;
+}
+
+function micLabel(listening) {
+  const words = listening ? 'Stop talking' : 'Start talking';
+  $('mic-label').textContent = words;
+  /* Spelled out for the screen reader too: the button's visible label is a
+     span next to a decorative dot, which some readers announce as nothing. */
+  $('btn-mic').setAttribute('aria-label', words);
+  $('btn-mic').setAttribute('aria-pressed', listening ? 'true' : 'false');
+  $('btn-mic').classList.toggle('is-live', listening);
+}
+
+function openVoice() {
+  $('voice-text').value = bucket.transcript || '';
+  $('voice-heard').hidden = true;
+  heard = [];
+  micLabel(false);
+
+  $('voice-hint').textContent = JKVoice.canListen
+    ? 'If it stops listening while you think, just tap it again. You can also fix the words by hand before I read them.'
+    : 'This browser will not listen directly. Tap in the box and use the microphone key on the keyboard instead - that works just as well.';
+  $('btn-mic').hidden = !JKVoice.canListen;
+
+  say($('voice-status'), '', '');
+  show('voice');
+}
+
+function toggleMic() {
+  if (listener && listener.listening) {
+    listener.stop();
+    return;
+  }
+
+  listener = JKVoice.createListener({
+    onText: (text) => { $('voice-text').value = text; },
+    onStop: () => { micLabel(false); say($('voice-status'), 'Stopped listening.', ''); },
+    onError: (why) => { micLabel(false); say($('voice-status'), why, 'bad'); }
+  });
+
+  if (!listener) {
+    say($('voice-status'), 'This browser will not listen. Use the microphone key on the keyboard.', 'bad');
+    return;
+  }
+
+  listener.start($('voice-text').value.trim());
+  micLabel(true);
+  say($('voice-status'), 'Listening. Say what it is, what you paid, and where it lives.', 'busy');
+}
+
+function readBack() {
+  if (listener && listener.listening) listener.stop();
+
+  const spoken = $('voice-text').value.trim();
+  if (!spoken) {
+    say($('voice-status'), 'Nothing to read yet. Tap the microphone, or type a line.', 'bad');
+    return;
+  }
+
+  heard = JKVoice.parse(spoken);
+  const host = $('voice-list');
+  host.innerHTML = '';
+
+  if (!heard.length) {
+    /* Nothing I could turn into a box. The words still go on the item, so the
+       button stays live - a transcript on the record is worth having on its own,
+       and the Mac gets a better shot at it later with the photos in hand. */
+    host.innerHTML = '<p class="hint">I could not turn any of that into a box. Tap Fill ' +
+                     'these in and I will still keep your words with the item, or say it ' +
+                     'again with the price and the place in the sentence.</p>';
+    $('voice-heard').hidden = false;
+    say($('voice-status'), 'Nothing I could fill in from that.', 'bad');
+    return;
+  }
+
+  heard.forEach((finding, index) => {
+    const row = document.createElement('label');
+    row.className = 'check heard-row';
+
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = true;
+    box.onchange = () => { heard[index].use = box.checked; };
+
+    const text = document.createElement('span');
+    text.textContent = finding.heard + (finding.estimated ? ' (I will mark that a guess)' : '');
+
+    row.appendChild(box);
+    row.appendChild(text);
+    host.appendChild(row);
+  });
+
+  $('voice-heard').hidden = false;
+  say($('voice-status'),
+      'That is ' + heard.length + ' thing' + (heard.length === 1 ? '' : 's') +
+      ' I can fill in for you.', 'ok');
+}
+
+function applyVoice() {
+  const spoken = $('voice-text').value.trim();
+  bucket.transcript = spoken;
+
+  const filled = [];
+  const kept = [];
+
+  heard.filter((f) => f.use).forEach((f) => {
+    const id = VOICE_TARGETS[f.field];
+    if (!id) return;
+    const el = $(id);
+    const existing = el.value.trim();
+
+    /* Notes are added to, never replaced - he may have typed something there
+       already and it would be rude to throw it away. */
+    if (f.field === 'notes') {
+      if (existing.indexOf(f.value) === -1) {
+        el.value = existing ? existing + '\n' + f.value : f.value;
+        filled.push(SPOKEN_NAMES[f.field]);
+      }
+      return;
+    }
+
+    const untouched = !existing || existing === VOICE_DEFAULTS[f.field];
+    if (!untouched && existing !== f.value) {
+      kept.push(SPOKEN_NAMES[f.field]);
+      return;
+    }
+
+    el.value = f.value;
+    filled.push(SPOKEN_NAMES[f.field]);
+
+    if (f.estimated) bucket.estimated.add(f.field);
+    else bucket.estimated.delete(f.field);
+  });
+
+  /* Keep the tick box honest: if the price or date came out of a hedge, it is
+     a best guess, and the box that says so should already be ticked. */
+  if (['purchase_price', 'purchase_date', 'seller'].some((f) => bucket.estimated.has(f))) {
+    $('f-price-est').checked = true;
+  }
+
+  showTranscript();
+  updateNag();
+  show('item');
+
+  const parts = [];
+  if (filled.length) parts.push('Filled in ' + filled.join(', ') + '.');
+  if (kept.length) parts.push('Left ' + kept.join(' and ') + ' as you already had ' +
+                              (kept.length === 1 ? 'it' : 'them') + '.');
+  parts.push('Check it over, then tap Save Item.');
+  say($('item-status'), parts.join(' '), filled.length ? 'ok' : '');
+  $('item-status').scrollIntoView({ block: 'center' });
 }
 
 /* ============================================================ uploading */
@@ -626,6 +832,7 @@ function wire() {
   /* --- item --- */
   $('in-photos').onchange = (e) => { addFiles(e.target.files, 'photos'); e.target.value = ''; };
   $('in-receipts').onchange = (e) => { addFiles(e.target.files, 'receipts'); e.target.value = ''; };
+  $('btn-talk').onclick = openVoice;
   $('f-category').onchange = updateNag;
   $('f-serial').oninput = updateNag;
   $('btn-save-item').onclick = saveItem;
@@ -634,6 +841,22 @@ function wire() {
     if (count && !confirm(`Throw away this item and its ${count} photo${count === 1 ? '' : 's'}?`)) return;
     bucket = null;
     show('home');
+  };
+
+  /* --- talk to fill --- */
+  $('btn-mic').onclick = toggleMic;
+  $('btn-voice-read').onclick = readBack;
+  $('btn-voice-apply').onclick = applyVoice;
+  $('btn-voice-again').onclick = () => {
+    if (listener && listener.listening) listener.stop();
+    $('voice-text').value = '';
+    $('voice-heard').hidden = true;
+    heard = [];
+    say($('voice-status'), 'Cleared. Tap the microphone when you are ready.', '');
+  };
+  $('btn-voice-cancel').onclick = () => {
+    if (listener && listener.listening) listener.stop();
+    show('item');
   };
 
   /* --- queue --- */

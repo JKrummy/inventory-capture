@@ -93,6 +93,11 @@
     <input id="in-receipts" type="file" accept="image/*,application/pdf" multiple hidden>
   </div>
 
+  <button id="btn-talk" class="talk-btn" type="button">
+    <span class="talk-btn-main">Talk to Fill</span>
+    <span class="talk-btn-sub">Say what it is and what you paid, instead of typing it</span>
+  </button>
+
   <h3 class="count-h">Photos of the item (<span id="count-photos">0</span>)</h3>
   <div id="thumbs-photos" class="thumbs" aria-live="polite"></div>
 
@@ -160,6 +165,13 @@
   </fieldset>
 
   <label class="field">
+    <span>What I think it is worth today</span>
+    <input id="f-myvalue" type="text" inputmode="decimal" placeholder="1200">
+  </label>
+  <p class="hint">Your own gut number, and that is all it has to be. Research can sharpen
+     it later; a blank here means there is nothing to sharpen.</p>
+
+  <label class="field">
     <span>Condition</span>
     <input id="f-condition" type="text" placeholder="Excellent, light wear on the finish">
   </label>
@@ -169,11 +181,58 @@
     <textarea id="f-notes" rows="3"></textarea>
   </label>
 
+  <div id="said-block" class="said" hidden>
+    <h3>What you said about this one</h3>
+    <p id="said-text"></p>
+    <p class="hint">Kept with the item word for word, so nothing you said is lost even
+       if I filled a box in wrongly.</p>
+  </div>
+
   <div class="actions">
     <button id="btn-save-item" class="big-btn" type="button">Save Item</button>
     <button id="btn-discard-item" class="plain-btn danger" type="button">Discard</button>
   </div>
   <p id="item-status" class="status" role="status" aria-live="polite"></p>
+</section>
+
+<!-- ============ TALK TO FILL ============ -->
+<section id="screen-voice" class="screen" aria-labelledby="voice-h" hidden>
+  <h2 id="voice-h">Talk to Fill</h2>
+  <p class="lead">Say what it is, what you paid, where it lives and whose it is, all in
+     one breath. Nothing is saved until you have seen what I made of it.</p>
+  <p class="hint">Something like: &ldquo;Vortex Razor scope, paid about 1,800 in 2021,
+     on my AR, belongs to me.&rdquo;</p>
+
+  <button id="btn-mic" class="mic-btn" type="button" aria-pressed="false"
+    aria-label="Start talking">
+    <span class="mic-dot" aria-hidden="true"></span>
+    <span id="mic-label">Start talking</span>
+  </button>
+
+  <label class="field">
+    <span>What I heard</span>
+    <textarea id="voice-text" rows="5"
+      placeholder="Tap Start talking. You can also tap in here and use the microphone key on the keyboard, or just type."></textarea>
+  </label>
+  <p class="hint" id="voice-hint"></p>
+
+  <div class="actions">
+    <button id="btn-voice-read" class="big-btn" type="button">Show me what you got</button>
+    <button id="btn-voice-cancel" class="plain-btn" type="button">Back to the item</button>
+  </div>
+
+  <div id="voice-heard" hidden>
+    <h3>Here is what I understood</h3>
+    <p class="hint">Untick anything I got wrong. What stays ticked goes into the form,
+       where you can still change it before you save.</p>
+    <div id="voice-list"></div>
+    <div class="actions">
+      <button id="btn-voice-apply" class="big-btn" type="button">Fill these in</button>
+      <button id="btn-voice-again" class="plain-btn" type="button">Clear and start again</button>
+    </div>
+  </div>
+
+  <p id="voice-status" class="status" role="status" aria-live="polite"></p>
 </section>
 
 <!-- ============ QUEUE ============ -->
@@ -217,6 +276,7 @@
   <span id="version-label">version</span>
 </footer>
 
+<script src="voice.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
