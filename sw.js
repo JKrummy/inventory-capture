@@ -1,7 +1,7 @@
 /* Caches the app itself so the icon still opens with no signal.
    Photos waiting to upload live in IndexedDB, not here. */
 
-const CACHE = 'jkinv-v1.2.0';
+const CACHE = 'jkinv-v1.2.1';
 const SHELL = [
   './',
   './index.html',

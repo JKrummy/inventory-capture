@@ -50,6 +50,19 @@
     'like', 'somewhere', 'near', 'close', 'nearly', 'probably', 'guessing',
     'ish', 'or', 'so', 'give', 'take', 'perhaps', 'figure']);
 
+  /* The iPhone dictates long runs with no punctuation at all, and jams the
+     next sentence onto the last word: "red lithium batteriesThis is located at
+     my house". Putting the break back is what lets everything below see
+     sentences instead of one 280-character word salad.
+
+     Only these openers count. Splitting on any lowercase-then-capital would
+     break DeWalt, McMaster and half the brand names in the shed. */
+  const OPENERS = 'This|That|These|Those|There|It|I|He|She|We|They|My|Also|And|But|So|Then|Now|The';
+
+  function unglue(text) {
+    return text.replace(new RegExp('([a-z])(' + OPENERS + ')\\b', 'g'), '$1. $2');
+  }
+
   /* Split into words, but remember where a clause ends. A comma inside 1,800 is
      a thousands separator; a comma at the end of a word ends the thought. */
   function tokenize(text) {
@@ -179,6 +192,22 @@
     return out.join(' ').trim();
   }
 
+  /* A shop name runs as far as the capital letters do: "Home Depot last year"
+     is a shop called Home Depot and then a separate thought about when. */
+  function properNoun(original, from, max) {
+    const tokens = tokenize(original.slice(from));
+    const out = [];
+    for (const t of tokens) {
+      const joiner = /^(?:of|and|&|de|la)$/i.test(t.raw) && out.length;
+      if (!/^[A-Z0-9]/.test(t.raw) && !joiner) break;
+      out.push(t.raw);
+      if (t.ends || out.length >= max) break;
+    }
+    /* Do not end on a joiner: "Bass Pro and" is not a shop. */
+    while (out.length && /^(?:of|and|&|de|la)$/i.test(out[out.length - 1])) out.pop();
+    return out.join(' ').trim();
+  }
+
   function titleish(s) {
     /* Dictation gives "cabela's" as often as "Cabela's". Capitalise the first
        letter of each word and leave the rest of the spelling alone. The letter
@@ -209,7 +238,7 @@
      saying what it heard, and whether it sounded like a guess. The caller
      shows these for confirmation; nothing here touches the form. */
   function parse(spoken) {
-    const original = String(spoken || '').trim().replace(/\s+/g, ' ');
+    const original = unglue(String(spoken || '').trim().replace(/\s+/g, ' '));
     const text = original.toLowerCase();
     if (!original) return [];
 
@@ -314,13 +343,32 @@
        almost never spoken with "the" in front of it, and "the" is how he
        talks about his own places. */
 
-    const sellerRe = /\b(?:bought\s+(?:it\s+)?(?:from|at)|from|at)\s+(?!the\b|my\b|his\b|her\b|our\b|work\b|home\b|house\b)/i;
-    const sellerMatch = sellerRe.exec(original);
-    if (sellerMatch) {
-      const phrase = phraseAfter(original, sellerMatch.index + sellerMatch[0].length, 3);
-      if (phrase && !/^\d+$/.test(phrase)) {
-        add('seller', titleish(phrase), 'Bought from ' + titleish(phrase), false);
-      }
+    /* A shop is a proper noun, and that is the only reliable way to tell
+       "bought it at Home Depot" from "it stays at home". Dictation capitalises
+       brand names and leaves ordinary words alone, so the capital letter is
+       the signal. Lower case after the preposition means it is a place or a
+       person, not a shop, and it is left for the location pass. */
+
+    let sellerPhrase = '';
+    const shopRe = /\b(?:bought\s+(?:it\s+)?(?:from|at)|from|at)\s+(the\s+)?(?=[A-Z])/g;
+    let shop;
+    while ((shop = shopRe.exec(original)) !== null) {
+      const phrase = properNoun(original, shop.index + shop[0].length, 4);
+      if (!phrase || /^\d+$/.test(phrase)) continue;
+      /* A capital at the very start of the sentence means nothing. */
+      if (shop.index === 0) continue;
+
+      sellerPhrase = phrase;
+      /* "probably bought it from Home Depot or maybe even Amazon" is two shops
+         and a shrug. Take the first, flag it, and do not pretend otherwise. */
+      const lead = text.slice(Math.max(0, shop.index - 30), shop.index);
+      const trail = text.slice(shop.index, shop.index + 80);
+      const unsure = /\b(probably|maybe|think|possibly|might|somewhere)\b/.test(lead) ||
+                     /\bor\s+(?:maybe|possibly|even|from|at)\b/.test(trail);
+      add('seller', titleish(phrase),
+          'Bought from ' + titleish(phrase) + (unsure ? ', though you did not sound sure' : ''),
+          unsure);
+      break;
     }
 
     /* --- where it is, and what it is mounted on ---------------------
@@ -348,6 +396,7 @@
       const article = prep[2].toLowerCase();
       const phrase = phraseAfter(original, prep.index + prep[0].length, 4);
       if (!phrase) continue;
+      if (sellerPhrase && phrase.toLowerCase() === sellerPhrase.toLowerCase()) continue;
 
       const isAttachment = word !== 'in' && word !== 'inside' && word !== 'at' &&
                            (word !== 'on' || article === 'my');
@@ -363,6 +412,20 @@
         }
       } else {
         add('location', titleish(phrase), 'It lives in the ' + phrase.toLowerCase(), false);
+      }
+    }
+
+    /* --- what it runs on ------------------------------------------------
+       Batteries, blades, bulbs, bits. Until compatibility is a real
+       relationship in the database, this at least keeps the fact on the item
+       in his own words instead of only in the transcript. */
+
+    const takesRe = /\b(?:that\s+|which\s+)?(?:takes|uses|runs\s+on|fits)\s+/i;
+    const takesMatch = takesRe.exec(original);
+    if (takesMatch) {
+      const what = phraseAfter(original, takesMatch.index + takesMatch[0].length, 6);
+      if (what && what.length > 2) {
+        add('notes', 'Takes ' + what, 'It takes ' + what, false);
       }
     }
 
@@ -445,6 +508,9 @@
       /\bin\s+(?:19|20)\d{2}\b/,
       /\bfrom\s+[a-z]/,
       /\b(?:in|on|at)\s+(?:the|my)\b/,
+      /\b(?:that|which|it)\s+(?:takes|uses|runs|fits|has|came|i)\b/,
+      /\b(?:takes|uses|runs\s+on)\s+\w/,
+      /\bi\s+(?:use|keep|bought|got|have\s+no)\b/,
       /\bin\s+(?:brand new|like new|mint|excellent|very good|good|fair|poor|rough)\b/
     ];
     for (const re of cutters) {
@@ -453,6 +519,9 @@
     }
     const comma = original.indexOf(',');
     if (comma > 0) cutAt.push(comma);
+    /* unglue() put the sentence breaks back, so a name can stop at one. */
+    const stop = original.search(/[.;!?]\s/);
+    if (stop > 0) cutAt.push(stop);
 
     let head = cutAt.length ? original.slice(0, Math.min.apply(null, cutAt)) : original;
     head = head
@@ -471,6 +540,11 @@
         head = phraseAfter(original, boughtMatch.index + boughtMatch[0].length, 5);
       }
     }
+
+    /* Still too long to be a name? Take the opening words rather than nothing
+       - "Milwaukee 3/8 10 mm drill driver" is a fine name, and the sentence it
+       came from is kept on the item anyway. */
+    if (head.length > 70) head = head.split(' ').slice(0, 8).join(' ');
 
     if (head.length < 3 || /^(?:uh|um|er|hmm|yeah|okay)$/i.test(head)) head = '';
 

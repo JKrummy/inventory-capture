@@ -2,7 +2,7 @@
    Phase 2: photos and a draft record go straight to Dropbox.
    The Mac side turns inbox drafts into real INV- numbered items. */
 
-const VERSION = '1.2.0';
+const VERSION = '1.2.1';
 
 const LS = {
   appKey:  'jkinv.appKey',
@@ -869,8 +869,37 @@ function wire() {
   $('btn-queue-back').onclick = () => show('home');
 
   /* --- settings --- */
+  /* The key is needed again to set the app up in a second browser, and once
+     connected there is nowhere else to see it. It is a public identifier -
+     PKCE means there is no client secret - so showing it costs nothing. */
+  $('btn-copy-key').onclick = async () => {
+    const key = localStorage.getItem(LS.appKey) || '';
+    if (!key) return say($('settings-status'), 'No app key saved on this phone yet.', 'bad');
+    try {
+      await navigator.clipboard.writeText(key);
+      say($('settings-status'), 'App key copied. Paste it into the other browser.', 'ok');
+    } catch {
+      say($('settings-status'), 'Could not reach the clipboard. The key is on screen above, ' +
+                                'so you can select it and copy it by hand.', 'bad');
+    }
+  };
+
+  $('btn-copy-link').onclick = async () => {
+    const key = localStorage.getItem(LS.appKey) || '';
+    if (!key) return say($('settings-status'), 'No app key saved on this phone yet.', 'bad');
+    const link = location.origin + location.pathname + '?key=' + encodeURIComponent(key);
+    try {
+      await navigator.clipboard.writeText(link);
+      say($('settings-status'),
+          'Link copied. Open it in the other browser and the key fills itself in.', 'ok');
+    } catch {
+      say($('settings-status'), 'Could not reach the clipboard. Type the key in by hand instead.', 'bad');
+    }
+  };
+
   $('btn-settings').onclick = () => {
     $('f-root').value = root();
+    $('show-appkey').textContent = localStorage.getItem(LS.appKey) || 'no app key saved yet';
     $('settings-account').textContent = isConnected()
       ? 'Connected to Dropbox: ' + (localStorage.getItem(LS.account) || 'signed in')
       : 'Not connected to Dropbox.';
