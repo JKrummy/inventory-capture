@@ -2,7 +2,7 @@
    Phase 2: photos and a draft record go straight to Dropbox.
    The Mac side turns inbox drafts into real INV- numbered items. */
 
-const VERSION = '1.4.0';
+const VERSION = '1.5.0';
 
 const LS = {
   appKey:  'jkinv.appKey',
